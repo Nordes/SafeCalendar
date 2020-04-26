@@ -26,11 +26,11 @@ type Model =
     }
 
 type Msg =
-    | MonthChange    of int
-    | MonthNow
+    | MonthViewChange    of int
+    | MonthViewToday
     | EventAdd       of System.DateTime
     | EventSave      of Components.Events.CalendarEvent
-    | EventAddToggle of bool * Components.Events.CalendarEvent option
+    | EventEditToggle of bool * Components.Events.CalendarEvent option
 
 let init(): Model * Cmd<Msg> =
     let initialModel =
@@ -48,15 +48,13 @@ let init(): Model * Cmd<Msg> =
 type DialogProps = {
   cancel:   unit -> unit
   save:     Components.Events.CalendarEvent -> unit
-  currentEvent: Components.Events.CalendarEvent option
+  currentEvent: Components.Events.CalendarEvent
   }
 
 let addEventModal = React.functionComponent("modalEvent", fun (props: DialogProps) ->
     // Some doc: https://zaid-ajaj.github.io/Feliz/#/Feliz/React/SubscriptionsWithEffects
     let eltRef = React.useElementRef()
-    let (currentEvent, setEventDetails) = React.useState( match props.currentEvent with
-                                                              | Some (evt) -> evt
-                                                              | None -> {Name= ""; Details="" } )
+    let (currentEvent, setEventDetails) = React.useState( props.currentEvent )
 
     let modalKey (ev:Browser.Types.Event) =
         let kev = ev :?> Browser.Types.KeyboardEvent
@@ -106,25 +104,46 @@ let addEventModal = React.functionComponent("modalEvent", fun (props: DialogProp
     )
 
 let update (msg: Msg) (state: Model): Model * Cmd<Msg> =
-    match msg with
-    | MonthChange nbMonths ->
+    match state, msg with
+    | _, MonthViewChange nbMonths ->
         let date = System.DateTime(state.Year, state.Month, 1)
         let newDate = date.AddMonths(nbMonths)
         let nextState = { state with Month = newDate.Month; Year = newDate.Year }
         nextState, Cmd.none
-    | MonthNow ->
+    | _, MonthViewToday ->
         let nextState = { state with
                             Month = System.DateTime.Now.Month
                             Year = System.DateTime.Now.Year
                         }
         nextState, Cmd.none
-    | EventAdd day ->
-        printfn "Day: %A" day
-        state, Cmd.ofMsg (EventAddToggle (true, None))
-    | EventSave e ->
-        let nextState = { state with Events = List.append state.Events [e] }
-        nextState, Cmd.ofMsg (EventAddToggle (false, None))
-    | EventAddToggle (visible, e) ->
+    | _, EventAdd day ->
+        state, Cmd.ofMsg (EventEditToggle (true, Some ({ Id = -1; Day = day; Name= ""; Details=""; })))
+    | _, EventSave e ->
+        printf "Eventid : %i" e.Id
+        let eventToSave =
+          if e.Id = -1 then
+            let newId = match state.Events with
+                          | [ ] -> 1
+                          | e ->
+                              e
+                              |> List.maxBy (fun evt -> evt.Id)
+                              |> fun evt -> evt.Id + 1
+            List.append state.Events [{ e with Id = newId }]
+          else
+            state.Events
+              |> List.map (fun evt ->
+                              if evt.Id = e.Id then
+                                e
+                              else
+                                evt
+                              )
+
+        // printf "NewEventid : %i" eventToSave.Id
+
+        let nextState = { state with Events = eventToSave }
+        // let nextState = { state with Events = List.append state.Events [eventToSave] }
+        nextState, Cmd.ofMsg (EventEditToggle (false, None))
+    | _, EventEditToggle (visible, e) ->
         let nextState = { state with EventAddingInProgress = visible; CurrentEvent = e }
         nextState, Cmd.none
 
@@ -137,17 +156,6 @@ let safeComponents =
 let getMonthName (month: int) =
   let months = [|"January";"February";"March";"April";"May";"June";"July";"August";"September";"October";"November";"December"|]
   months.[month-1]
-
-let getDayOfWeekName (day: System.DayOfWeek) =
-  match day with
-    | System.DayOfWeek.Monday     -> "Mon"
-    | System.DayOfWeek.Tuesday    -> "Tue"
-    | System.DayOfWeek.Wednesday  -> "Wed"
-    | System.DayOfWeek.Thursday   -> "Thu"
-    | System.DayOfWeek.Friday     -> "Fri"
-    | System.DayOfWeek.Saturday   -> "Sat"
-    | System.DayOfWeek.Sunday     -> "Sun"
-    | _                           -> "Should never happen"
 
 let button txt onClick =
     Button.button
@@ -169,7 +177,7 @@ let drawCalendar (model: Model) (dispatch: Msg -> unit) =
               prop.children [
                 Html.button [
                   prop.classes ["button"; "is-warning"; "is-light"]
-                  prop.onClick (fun _ -> dispatch (MonthChange -1))
+                  prop.onClick (fun _ -> dispatch (MonthViewChange -1))
                   prop.children [
                     Html.i [
                       prop.classes ["fa fa-chevron-left"] ] ] ] ] ]
@@ -179,7 +187,7 @@ let drawCalendar (model: Model) (dispatch: Msg -> unit) =
               if model.Month <> System.DateTime.Today.Month || model.Year <> System.DateTime.Today.Year then
                 Html.button [
                   prop.classes ["button"; "is-info"; "is-light"]
-                  prop.onClick (fun _ -> dispatch (MonthNow))
+                  prop.onClick (fun _ -> dispatch (MonthViewToday))
                   prop.text "Today"
                 ]
               ]
@@ -189,7 +197,7 @@ let drawCalendar (model: Model) (dispatch: Msg -> unit) =
               prop.children [
                 Html.button [
                   prop.classes ["button"; "is-warning"; "is-light"]
-                  prop.onClick (fun _ -> dispatch (MonthChange 1))
+                  prop.onClick (fun _ -> dispatch (MonthViewChange 1))
                   prop.children [
                     Html.i [
                       prop.classes ["fa fa-chevron-right"] ] ] ] ] ] ] ]
@@ -205,7 +213,7 @@ let drawCalendar (model: Model) (dispatch: Msg -> unit) =
                 for dow in 0..6 do
                   Html.div [
                     prop.className ["calendar-date"]
-                    prop.text (sprintf "%s" (getDayOfWeekName (enum<System.DayOfWeek>(dow))))
+                    prop.text (sprintf "%s" (CalendarUtil.getDayOfWeekName (enum<System.DayOfWeek>(dow))))
                   ]
               ]
             ] ] ]
@@ -218,16 +226,31 @@ let drawCalendar (model: Model) (dispatch: Msg -> unit) =
             let firstDayInCalendar = first.AddDays(- ((float)first.DayOfWeek))
             let isToday (day:System.DateTime) =
               day.Year = System.DateTime.Today.Year && day.Month = System.DateTime.Today.Month && day.Day = System.DateTime.Today.Day
-            // If first day of week is not sunday, it's 35... otherwise it's 30 when less than 31 day
+            let isTooltips (day:System.DateTime) =
+              model.Events |> List.exists (fun e -> e.Day = day)
             for d in 0.0..34.0 do // 7x5 ... so 35 days in the current calendar
               let currentDay = firstDayInCalendar.AddDays(d)
               Html.div [
-                prop.className [true, "calendar-date"; currentDay.Month <> model.Month, "is-disabled"]
+                prop.className [true, "calendar-date"; currentDay.Month <> model.Month, "is-disabled"; (isTooltips currentDay), "tooltips"]
+                if isTooltips currentDay then
+                  Interop.mkAttr "data-tooltip" "You have appointment"
                 prop.children [
                   Html.button [
                     prop.className [true, "date-item"; (isToday currentDay), "is-today"]
                     prop.text (sprintf "%i" currentDay.Day )
                     prop.onClick (fun _ -> dispatch (EventAdd currentDay) )
+                  ]
+                  Html.div [
+                    prop.className "calendar-events"
+                    prop.children [
+                      let todayEvents = model.Events |> List.filter (fun e -> e.Day = currentDay)
+                      for ev in todayEvents do
+                        Html.a [
+                          prop.className ["calendar-event"; "is-primary"]
+                          prop.text ev.Name
+                          prop.onClick (fun _ -> dispatch <| EventEditToggle (true, Some(ev)) )
+                        ]
+                    ]
                   ]
                 ]
               ]
@@ -236,12 +259,10 @@ let drawCalendar (model: Model) (dispatch: Msg -> unit) =
         // Control elments of the UI
         div [ ]
           [
-            // basicModal model.EventAddModalVisible (fun _ -> dispatch (EventAddModal false))
-            if model.EventAddingInProgress then
+            if model.CurrentEvent.IsSome && model.EventAddingInProgress then
               addEventModal {
-                currentEvent = model.CurrentEvent
-                cancel = (fun () ->
-                              dispatch <| EventAddToggle (false, None))
+                currentEvent = model.CurrentEvent.Value
+                cancel = (fun () -> dispatch <| EventEditToggle (false, None))
                 save = (fun (e: Components.Events.CalendarEvent) ->
                               dispatch <| EventSave e
                       )

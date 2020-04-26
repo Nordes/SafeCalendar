@@ -7,6 +7,8 @@ open Fable.React.Props
 open Fulma
 
 type CalendarEvent = {
+    Id: int
+    Day: System.DateTime
     Name: string
     Details: string
   }
