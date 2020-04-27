@@ -11,6 +11,7 @@ open Thoth.Json
 open Feliz
 open Shared
 open System
+open Utils
 
 type Day =
     { Number: int }
@@ -20,8 +21,8 @@ type Model =
       Month: int
       Year: int
       SelectedDay: System.DateTime option
-      CurrentEvent: Components.Events.CalendarEvent option
-      Events: Components.Events.CalendarEvent List
+      CurrentEvent: CalendarEvent option
+      Events: CalendarEvent List
       EventAddingInProgress: bool
     }
 
@@ -29,8 +30,8 @@ type Msg =
     | MonthViewChange    of int
     | MonthViewToday
     | EventAdd       of System.DateTime
-    | EventSave      of Components.Events.CalendarEvent
-    | EventEditToggle of bool * Components.Events.CalendarEvent option
+    | EventSave      of CalendarEvent
+    | EventEditToggle of bool * CalendarEvent option
 
 let init(): Model * Cmd<Msg> =
     let initialModel =
@@ -47,11 +48,11 @@ let init(): Model * Cmd<Msg> =
 
 type DialogProps = {
   cancel:   unit -> unit
-  save:     Components.Events.CalendarEvent -> unit
-  currentEvent: Components.Events.CalendarEvent
+  save:     CalendarEvent -> unit
+  currentEvent: CalendarEvent
   }
 
-let addEventModal = React.functionComponent("modalEvent", fun (props: DialogProps) ->
+let eventModal = React.functionComponent("modalEvent", fun (props: DialogProps) ->
     // Some doc: https://zaid-ajaj.github.io/Feliz/#/Feliz/React/SubscriptionsWithEffects
     let eltRef = React.useElementRef()
     let (currentEvent, setEventDetails) = React.useState( props.currentEvent )
@@ -93,13 +94,13 @@ let addEventModal = React.functionComponent("modalEvent", fun (props: DialogProp
                 ]
               Modal.Card.foot [ ]
                 [ Button.button [
-                    Button.Color IsSuccess
-                    Button.OnClick <| fun e -> props.save currentEvent
+                      Button.Color IsSuccess
+                      Button.OnClick <| fun e -> props.save currentEvent
                     ]
                     [ str "Save Event" ]
                   Button.button [ Button.OnClick <| fun _ -> props.cancel() ]
-                    [ str "Cancel" ] ] ]
-        ] ]
+                    [ str "Cancel" ] ]
+            ] ] ]
       ]
     )
 
@@ -131,17 +132,9 @@ let update (msg: Msg) (state: Model): Model * Cmd<Msg> =
             List.append state.Events [{ e with Id = newId }]
           else
             state.Events
-              |> List.map (fun evt ->
-                              if evt.Id = e.Id then
-                                e
-                              else
-                                evt
-                              )
-
-        // printf "NewEventid : %i" eventToSave.Id
+              |> List.map (fun evt -> if evt.Id = e.Id then e else evt )
 
         let nextState = { state with Events = eventToSave }
-        // let nextState = { state with Events = List.append state.Events [eventToSave] }
         nextState, Cmd.ofMsg (EventEditToggle (false, None))
     | _, EventEditToggle (visible, e) ->
         let nextState = { state with EventAddingInProgress = visible; CurrentEvent = e }
@@ -260,10 +253,10 @@ let drawCalendar (model: Model) (dispatch: Msg -> unit) =
         div [ ]
           [
             if model.CurrentEvent.IsSome && model.EventAddingInProgress then
-              addEventModal {
+              eventModal {
                 currentEvent = model.CurrentEvent.Value
                 cancel = (fun () -> dispatch <| EventEditToggle (false, None))
-                save = (fun (e: Components.Events.CalendarEvent) ->
+                save = (fun (e: CalendarEvent) ->
                               dispatch <| EventSave e
                       )
                 }

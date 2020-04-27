@@ -1,6 +1,6 @@
-# SAFE Template
+# SAFE Calendar
 
-This template can be used to generate a full-stack web application using the [SAFE Stack](https://safe-stack.github.io/). It was created using the dotnet [SAFE Template](https://safe-stack.github.io/docs/template-overview/). If you want to learn more about the template why not start with the [quick start](https://safe-stack.github.io/docs/quickstart/) guide?
+Using the [SAFE Stack](https://safe-stack.github.io/), I wanted to build something a bit different from the sample available on the website to experiment and learn a bit. The quality of the code is not something I am looking for, but more experimenting the technology and how it all interacts together
 
 ## Install pre-requisites
 
@@ -26,14 +26,18 @@ To concurrently run the server and the client components in watch mode use the f
 dotnet fake build -t run
 ```
 
+## How it works
 
-## SAFE Stack Documentation
+The calendar have the following features
 
-You will find more documentation about the used F# components at the following places:
+Client:
+  * Add events
+  * Edit events
+  * Move accross months
 
-* [Saturn](https://saturnframework.org/docs/)
-* [Fable](https://fable.io/docs/)
-* [Elmish](https://elmish.github.io/elmish/)
-* [Fulma](https://fulma.github.io/Fulma/)
-
-If you want to know more about the full Azure Stack and all of it's components (including Azure) visit the official [SAFE documentation](https://safe-stack.github.io/docs/).
+Server: (All in TODO)
+  * API's (OData or simple RESTful?)
+    * Add/Update events (Not existing)
+    * Get events for a particular set of dates
+  * Database
+    * Not existing so far... could be stored in text file or csv for now... even ICAL format... why not

@@ -5,13 +5,7 @@ open Feliz
 open Fable.React
 open Fable.React.Props
 open Fulma
-
-type CalendarEvent = {
-    Id: int
-    Day: System.DateTime
-    Name: string
-    Details: string
-  }
+open Shared
 
 type EventsActions = {
   current: CalendarEvent
@@ -40,7 +34,9 @@ let Add = React.functionComponent("FormAddEvent", fun (events:EventsActions) ->
      Field.div [ ]
           [ Label.label [ ]
               [ str "Details" ]
-            Control.div [ Control.IsLoading true ]
+            Control.div [
+                // Control.IsLoading true
+              ]
               [ Textarea.textarea [
                     Textarea.Value events.current.Details
                     Textarea.OnChange
